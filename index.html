@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aurora Pomodoro Timer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #311042 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Aurora background glowing blobs */
+        .aurora-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            z-index: -1;
+            filter: blur(80px);
+            opacity: 0.6;
+        }
+        .blob {
+            position: absolute;
+            border-radius: 50%;
+            will-change: transform;
+            animation: floatBlob 20s infinite alternate ease-in-out;
+        }
+        .blob-1 {
+            width: 400px;
+            height: 400px;
+            background: rgba(99, 102, 241, 0.4);
+            top: -10%;
+            left: -10%;
+            animation-duration: 18s;
+        }
+        .blob-2 {
+            width: 500px;
+            height: 500px;
+            background: rgba(236, 72, 153, 0.3);
+            bottom: -20%;
+            right: -10%;
+            animation-duration: 25s;
+        }
+        .blob-3 {
+            width: 350px;
+            height: 350px;
+            background: rgba(14, 165, 233, 0.3);
+            top: 40%;
+            left: 30%;
+            animation-duration: 22s;
+        }
+
+        @keyframes floatBlob {
+            0% { transform: translate(0px, 0px) scale(1); }
+            50% { transform: translate(50px, -40px) scale(1.1); }
+            100% { transform: translate(-30px, 40px) scale(0.95); }
+        }
+
+        /* Apple Liquid Glass Panel */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.07);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37),
+                        inset 0 0 0 1px rgba(255, 255, 255, 0.1),
+                        inset 0 1px 2px 0 rgba(255, 255, 255, 0.2);
+        }
+
+        .glass-panel-subtle {
+            background: rgba(255, 255, 255, 0.04);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        /* Custom range sliders */
+        input[type=range] {
+            accent-color: #ec4899;
+        }
+    </style>
+</head>
+<body class="text-slate-100 flex flex-col items-center justify-between min-h-screen p-4 sm:p-6">
+
+    <div class="aurora-bg">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <header class="w-full max-w-md mx-auto flex flex-col gap-4 mb-4">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <div class="w-9 h-9 rounded-xl glass-panel flex items-center justify-center text-pink-400 font-bold text-lg shadow-inner">⚡</div>
+                <h1 class="text-xl font-bold tracking-tight text-white/90">Aurora Pomodoro</h1>
+            </div>
+            <div class="flex items-center gap-2">
+                <!-- Sound Toggle Button -->
+                <button id="sound-btn" onclick="toggleSound()" class="px-3 py-1.5 rounded-xl glass-panel-subtle hover:bg-white/10 text-xs font-medium transition flex items-center gap-1.5 text-slate-300">
+                    <span id="sound-icon">🔊</span> <span id="sound-text">소리 켜짐</span>
+                </button>
+                <!-- Settings Button -->
+                <button onclick="toggleSettings()" class="w-9 h-9 rounded-xl glass-panel-subtle hover:bg-white/10 flex items-center justify-center text-slate-300 transition" title="설정">
+                    ⚙️
+                </button>
+            </div>
+        </div>
+
+        <!-- Current Task Input Card -->
+        <div class="glass-panel rounded-2xl p-3 flex items-center gap-3 transition">
+            <span class="text-pink-400 text-lg">🎯</span>
+            <input type="text" id="task-input" placeholder="지금 집중할 일을 입력하세요..." 
+                class="w-full bg-transparent text-sm text-slate-100 placeholder-slate-400 focus:outline-none"
+                oninput="saveTask(this.value)">
+        </div>
+    </header>
+
+    <main class="w-full max-w-md mx-auto flex flex-col items-center flex-1 justify-center my-2">
+        
+        <!-- Mode Navigation Tabs -->
+        <div class="glass-panel-subtle p-1.5 rounded-2xl flex gap-1 mb-6 w-full max-w-xs shadow-inner">
+            <button onclick="switchMode('pomodoro')" id="tab-pomodoro" class="flex-1 py-2 text-xs font-semibold rounded-xl transition text-white bg-white/15 shadow-sm">집중</button>
+            <button onclick="switchMode('shortBreak')" id="tab-shortBreak" class="flex-1 py-2 text-xs font-semibold rounded-xl transition text-slate-400 hover:text-slate-200">짧은 휴식</button>
+            <button onclick="switchMode('longBreak')" id="tab-longBreak" class="flex-1 py-2 text-xs font-semibold rounded-xl transition text-slate-400 hover:text-slate-200">긴 휴식</button>
+        </div>
+
+        <!-- Circular Timer Display -->
+        <div class="relative w-72 h-72 sm:w-80 sm:h-80 flex items-center justify-center mb-6">
+            <!-- SVG Progress Ring -->
+            <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                <!-- Background Track -->
+                <circle cx="50" cy="50" r="44" stroke="rgba(255, 255, 255, 0.08)" stroke-width="4" fill="transparent" />
+                <!-- Animated Progress Bar -->
+                <circle id="progress-ring" cx="50" cy="50" r="44" stroke="url(#gradient)" stroke-width="4" stroke-linecap="round" fill="transparent" 
+                    stroke-dasharray="276.46" stroke-dashoffset="0" style="transition: stroke-dashoffset 0.5s linear;" />
+                <!-- Gradient Definition -->
+                <defs>
+                    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#ec4899" />
+                        <stop offset="50%" stop-color="#8b5cf6" />
+                        <stop offset="100%" stop-color="#3b82f6" />
+                    </linearGradient>
+                </defs>
+            </svg>
+
+            <!-- Center Content (MM:SS & Current State) -->
+            <div class="absolute flex flex-col items-center justify-center text-center">
+                <div id="timer-display" class="text-5xl sm:text-6xl font-extrabold tracking-tight text-white drop-shadow-md mb-1">25:00</div>
+                <div id="timer-status" class="text-xs font-medium text-pink-300 tracking-wide uppercase">집중 시간</div>
+                <div id="completion-banner" class="hidden mt-2 px-3 py-1 bg-pink-500/30 border border-pink-400/40 rounded-full text-[11px] font-semibold text-pink-200 animate-pulse">
+                    ✨ 완료되었습니다!
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls: Start/Pause, Reset, Skip -->
+        <div class="flex items-center gap-4 mb-4">
+            <button onclick="resetTimer()" class="w-12 h-12 rounded-2xl glass-panel-subtle hover:bg-white/10 flex items-center justify-center text-slate-300 transition text-lg shadow-inner" title="초기화 (R)">
+                🔄
+            </button>
+            <button id="start-btn" onclick="toggleTimer()" class="px-8 py-4 rounded-2xl bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 text-white font-bold text-base shadow-lg shadow-purple-500/30 hover:opacity-95 transform active:scale-95 transition flex items-center gap-2">
+                <span id="start-icon">▶</span> <span id="start-text">시작하기</span>
+            </button>
+            <button onclick="skipTimer()" class="w-12 h-12 rounded-2xl glass-panel-subtle hover:bg-white/10 flex items-center justify-center text-slate-300 transition text-lg shadow-inner" title="건너뛰기">
+                ⏭
+            </button>
+        </div>
+
+        <!-- Keyboard Shortcut Hints -->
+        <div class="text-[11px] text-slate-400 mb-6 flex gap-3">
+            <span>단축키: <kbd class="px-1.5 py-0.5 rounded bg-white/10 text-slate-300">Space</kbd> 시작/정지</span>
+            <span><kbd class="px-1.5 py-0.5 rounded bg-white/10 text-slate-300">R</kbd> 리셋</span>
+        </div>
+
+        <!-- Today's Completed Sessions Tracker -->
+        <div class="glass-panel-subtle rounded-2xl px-5 py-3 flex items-center justify-between w-full max-w-xs text-sm">
+            <span class="text-slate-400 font-medium">오늘 완료한 집중</span>
+            <div class="flex items-center gap-1.5 font-bold text-pink-300">
+                <span id="completed-count">0</span>회 <span class="text-xs text-slate-400 font-normal">(4회마다 긴 휴식)</span>
+            </div>
+        </div>
+    </main>
+
+    <div id="settings-modal" class="fixed inset-0 bg-black/60 backdrop-blur-md hidden items-center justify-center z-50 p-4">
+        <div class="glass-panel rounded-3xl p-6 w-full max-w-sm shadow-2xl border border-white/20 animate-scaleIn">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-lg font-bold text-white">타이머 시간 설정 (분)</h2>
+                <button onclick="toggleSettings()" class="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center text-slate-300 hover:bg-white/20 transition">✕</button>
+            </div>
+            
+            <div class="space-y-4 mb-6">
+                <div>
+                    <div class="flex justify-between text-xs font-medium text-slate-300 mb-1">
+                        <span>집중 시간</span>
+                        <span id="val-pomodoro" class="text-pink-400 font-bold">25분</span>
+                    </div>
+                    <input type="range" id="setting-pomodoro" min="1" max="60" value="25" oninput="updateSettingValue('pomodoro', this.value)" class="w-full">
+                </div>
+                <div>
+                    <div class="flex justify-between text-xs font-medium text-slate-300 mb-1">
+                        <span>짧은 휴식</span>
+                        <span id="val-short" class="text-pink-400 font-bold">5분</span>
+                    </div>
+                    <input type="range" id="setting-short" min="1" max="30" value="5" oninput="updateSettingValue('short', this.value)" class="w-full">
+                </div>
+                <div>
+                    <div class="flex justify-between text-xs font-medium text-slate-300 mb-1">
+                        <span>긴 휴식</span>
+                        <span id="val-long" class="text-pink-400 font-bold">15분</span>
+                    </div>
+                    <input type="range" id="setting-long" min="1" max="60" value="15" oninput="updateSettingValue('long', this.value)" class="w-full">
+                </div>
+            </div>
+
+            <button onclick="saveSettings()" class="w-full py-3 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 font-bold text-white shadow-lg hover:opacity-95 transition">
+                저장 및 적용
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // State Variables
+        let currentMode = 'pomodoro'; // 'pomodoro' | 'shortBreak' | 'longBreak'
+        let durations = {
+            pomodoro: 25 * 60,
+            shortBreak: 5 * 60,
+            longBreak: 15 * 60
+        };
+        
+        let timeLeft = durations.pomodoro;
+        let totalDuration = durations.pomodoro;
+        let timerId = null;
+        let isRunning = false;
+        let targetEndTime = null; // 종료 시각 기준 정확한 계산을 위한 타임스탬프
+        
+        let soundEnabled = true;
+        let completedPomodoros = 0;
+        let currentTask = '';
+
+        // DOM Elements
+        const timerDisplay = document.getElementById('timer-display');
+        const timerStatus = document.getElementById('timer-status');
+        const startBtnText = document.getElementById('start-text');
+        const startIcon = document.getElementById('start-icon');
+        const progressRing = document.getElementById('progress-ring');
+        const completedCountEl = document.getElementById('completed-count');
+        const soundIconEl = document.getElementById('sound-icon');
+        const soundTextEl = document.getElementById('sound-text');
+        const completionBanner = document.getElementById('completion-banner');
+
+        window.onload = function() {
+            loadSavedData();
+            updateDisplay();
+
+            // Keyboard shortcuts support (Space = Start/Pause, R = Reset)
+            window.addEventListener('keydown', (e) => {
+                // Ignore if typing in input field
+                if (document.activeElement.tagName === 'INPUT') return;
+
+                if (e.code === 'Space') {
+                    e.preventDefault();
+                    toggleTimer();
+                } else if (e.code === 'KeyR') {
+                    e.preventDefault();
+                    resetTimer();
+                }
+            });
+        };
+
+        // Web Audio API Sound generator (No external files)
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playBeep(type = 'complete') {
+            if (!soundEnabled) return;
+            try {
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                if (type === 'complete') {
+                    // Distinct pleasant multi-tone chime for completion
+                    const now = audioCtx.currentTime;
+                    osc.frequency.setValueAtTime(587.33, now); // D5
+                    osc.frequency.setValueAtTime(880, now + 0.15); // A5
+                    osc.frequency.setValueAtTime(1174.66, now + 0.3); // D6
+                    
+                    gain.gain.setValueAtTime(0.25, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
+                    
+                    osc.start(now);
+                    osc.stop(now + 0.7);
+                } else {
+                    // Click sound
+                    osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+                    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.05);
+                }
+            } catch (err) {
+                console.error("Audio playback error:", err);
+            }
+        }
+
+        // Mode Switching
+        function switchMode(mode) {
+            if (isRunning) {
+                if (!confirm("진행 중인 타이머가 중단됩니다. 모드를 변경하시겠습니까?")) return;
+                pauseTimer();
+            }
+            currentMode = mode;
+            totalDuration = durations[mode];
+            timeLeft = totalDuration;
+            
+            // Hide completion banner when switching mode
+            completionBanner.classList.add('hidden');
+
+            // Update Tab UI
+            ['pomodoro', 'shortBreak', 'longBreak'].forEach(m => {
+                const btn = document.getElementById(`tab-${m}`);
+                if (m === mode) {
+                    btn.className = "flex-1 py-2 text-xs font-semibold rounded-xl transition text-white bg-white/15 shadow-sm";
+                } else {
+                    btn.className = "flex-1 py-2 text-xs font-semibold rounded-xl transition text-slate-400 hover:text-slate-200";
+                }
+            });
+
+            // Update Status Text
+            if (mode === 'pomodoro') timerStatus.textContent = "집중 시간";
+            else if (mode === 'shortBreak') timerStatus.textContent = "짧은 휴식";
+            else if (mode === 'longBreak') timerStatus.textContent = "긴 휴식";
+
+            updateDisplay();
+        }
+
+        // Timer Start / Pause Toggle
+        function toggleTimer() {
+            playBeep('click');
+            if (isRunning) {
+                pauseTimer();
+            } else {
+                startTimer();
+            }
+        }
+
+        function startTimer() {
+            if (!isRunning) {
+                isRunning = true;
+                completionBanner.classList.add('hidden');
+                // 정확한 종료 시각 계산 (현재 시각 + 남은 초 * 1000ms)
+                targetEndTime = Date.now() + (timeLeft * 1000);
+                
+                startBtnText.textContent = "일시정지";
+                startIcon.textContent = "❚❚";
+
+                timerId = setInterval(() => {
+                    const now = Date.now();
+                    const remainingMs = targetEndTime - now;
+                    timeLeft = Math.max(0, Math.ceil(remainingMs / 1000));
+
+                    updateDisplay();
+
+                    if (timeLeft <= 0) {
+                        clearInterval(timerId);
+                        handleTimerComplete();
+                    }
+                }, 200);
+            }
+        }
+
+        function pauseTimer() {
+            if (isRunning) {
+                isRunning = false;
+                clearInterval(timerId);
+                if (targetEndTime) {
+                    timeLeft = Math.max(0, Math.round((targetEndTime - Date.now()) / 1000));
+                }
+                startBtnText.textContent = "시작하기";
+                startIcon.textContent = "▶";
+            }
+        }
+
+        function resetTimer() {
+            playBeep('click');
+            pauseTimer();
+            timeLeft = durations[currentMode];
+            completionBanner.classList.add('hidden');
+            updateDisplay();
+        }
+
+        function skipTimer() {
+            playBeep('click');
+            pauseTimer();
+            moveToNextMode();
+        }
+
+        // Timer Completion Handling
+        function handleTimerComplete() {
+            playBeep('complete');
+            isRunning = false;
+            startBtnText.textContent = "시작하기";
+            startIcon.textContent = "▶";
+            
+            if (currentMode === 'pomodoro') {
+                completedPomodoros++;
+                saveData();
+                updateCompletedCount();
+                
+                // 집중 4회 완료 시 긴 휴식(15분), 그 외에는 짧은 휴식(5분)
+                if (completedPomodoros % 4 === 0) {
+                    switchMode('longBreak');
+                } else {
+                    switchMode('shortBreak');
+                }
+            } else {
+                switchMode('pomodoro');
+            }
+
+            // 모드 전환 후에 완료 표시 (switchMode가 배너를 숨기므로 순서 중요)
+            completionBanner.classList.remove('hidden');
+        }
+
+        function moveToNextMode() {
+            if (currentMode === 'pomodoro') {
+                switchMode('shortBreak');
+            } else {
+                switchMode('pomodoro');
+            }
+        }
+
+        // Display & Progress Ring Update with tab title synchronization
+        function updateDisplay() {
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            const timeStr = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            timerDisplay.textContent = timeStr;
+            
+            // Browser tab title update
+            const modePrefix = currentMode === 'pomodoro' ? '🍅' : '☕';
+            document.title = `${modePrefix} ${timeStr} - Aurora Pomodoro`;
+
+            // SVG Progress Ring Calculation (Circumference = 2 * PI * 44 ≈ 276.46)
+            const circumference = 276.46;
+            const progress = totalDuration > 0 ? timeLeft / totalDuration : 0;
+            const dashoffset = circumference * (1 - progress);
+            progressRing.style.strokeDashoffset = dashoffset;
+        }
+
+        // Sound Toggle
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            if (soundEnabled) {
+                soundIconEl.textContent = "🔊";
+                soundTextEl.textContent = "소리 켜짐";
+            } else {
+                soundIconEl.textContent = "🔇";
+                soundTextEl.textContent = "소리 꺼짐";
+            }
+            playBeep('click');
+        }
+
+        // Settings Modal Management
+        function toggleSettings() {
+            const modal = document.getElementById('settings-modal');
+            modal.classList.toggle('hidden');
+            modal.classList.toggle('flex');
+            
+            if (!modal.classList.contains('hidden')) {
+                document.getElementById('setting-pomodoro').value = durations.pomodoro / 60;
+                document.getElementById('setting-short').value = durations.shortBreak / 60;
+                document.getElementById('setting-long').value = durations.longBreak / 60;
+                
+                document.getElementById('val-pomodoro').textContent = (durations.pomodoro / 60) + "분";
+                document.getElementById('val-short').textContent = (durations.shortBreak / 60) + "분";
+                document.getElementById('val-long').textContent = (durations.longBreak / 60) + "분";
+            }
+        }
+
+        function updateSettingValue(type, val) {
+            document.getElementById(`val-${type}`).textContent = val + "분";
+        }
+
+        function saveSettings() {
+            durations.pomodoro = parseInt(document.getElementById('setting-pomodoro').value) * 60;
+            durations.shortBreak = parseInt(document.getElementById('setting-short').value) * 60;
+            durations.longBreak = parseInt(document.getElementById('setting-long').value) * 60;
+            
+            try {
+                localStorage.setItem('aurora_durations', JSON.stringify(durations));
+            } catch (e) {
+                console.error("Failed to save durations to localStorage:", e);
+            }
+
+            toggleSettings();
+            resetTimer();
+        }
+
+        // Task and Session Persistence with try/catch safety
+        function saveTask(val) {
+            currentTask = val;
+            try {
+                localStorage.setItem('aurora_current_task', val);
+            } catch (e) {
+                console.error("Failed to save task to localStorage:", e);
+            }
+        }
+
+        function localDateKey() {
+            const d = new Date();
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
+
+        function saveData() {
+            const todayKey = localDateKey();
+            try {
+                localStorage.setItem(`aurora_count_${todayKey}`, completedPomodoros);
+            } catch (e) {
+                console.error("Failed to save session count to localStorage:", e);
+            }
+        }
+
+        function loadSavedData() {
+            try {
+                // Load Durations
+                const savedDurations = localStorage.getItem('aurora_durations');
+                if (savedDurations) {
+                    durations = JSON.parse(savedDurations);
+                }
+            } catch (e) {
+                console.error("Failed to load durations from localStorage:", e);
+            }
+
+            timeLeft = durations[currentMode];
+            totalDuration = durations[currentMode];
+
+            try {
+                // Load Task
+                const savedTask = localStorage.getItem('aurora_current_task');
+                if (savedTask) {
+                    currentTask = savedTask;
+                    document.getElementById('task-input').value = savedTask;
+                }
+            } catch (e) {
+                console.error("Failed to load task from localStorage:", e);
+            }
+
+            try {
+                // Load Today's Count
+                const todayKey = localDateKey();
+                const savedCount = localStorage.getItem(`aurora_count_${todayKey}`);
+                if (savedCount) {
+                    completedPomodoros = parseInt(savedCount, 10) || 0;
+                }
+            } catch (e) {
+                console.error("Failed to load session count from localStorage:", e);
+            }
+
+            updateCompletedCount();
+        }
+
+        function updateCompletedCount() {
+            completedCountEl.textContent = completedPomodoros;
+        }
+    </script>
+</body>
+</html>
